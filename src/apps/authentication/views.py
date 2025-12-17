@@ -8,7 +8,7 @@ from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
 from apps.authentication.serializer import LoginSerializer, RegisterSerializer
-
+from apps.users.models import User
 
 class UserAuthAPIView(viewsets.ViewSet):
     permission_classes = [permissions.AllowAny]
@@ -29,10 +29,10 @@ class UserAuthAPIView(viewsets.ViewSet):
         serializer = LoginSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-
+        
         user = authenticate(
             request=request,
-            email=data["email"],
+            username=data["username"],
             password=data["password"],
         )
 

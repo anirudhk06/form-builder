@@ -13,8 +13,8 @@ class BaseModel(AuditModel):
         abstract = True
     
     def save(self, *args, **kwargs):
-        user = get_user_model()
-
+        from crum import get_current_user
+        user = get_current_user()
         if user is None or user.is_anonymous:
             self.created_by = None
             self.updated_by = None

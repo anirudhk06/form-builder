@@ -5,7 +5,7 @@ from . import views
 
 router = DefaultRouter(trailing_slash=False)
 
-router.register("", views.UserAuthAPIView)
+router.register("", views.UserAuthAPIView, basename="auth")
 urlpatterns = [
 ]
 

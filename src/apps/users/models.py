@@ -4,39 +4,23 @@ from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, UserM
 from django.db import models
 from django.utils import timezone
 
-from db.mixins import TimeAuditModel
-
-# Create your models here.
+from db.base import BaseModel
 
 
-class User(AbstractBaseUser, PermissionsMixin):
+class User(AbstractBaseUser, PermissionsMixin, BaseModel):
     # choices
-    class Role(models.TextChoices):
-        ADMIN = "ADMIN", "Admin"
-        STAFF = "STAFF", "Staff"
-        USER = "USER", "User"
-
     USER_TIMEZONE_CHOICES = tuple(zip(pytz.all_timezones, pytz.all_timezones))
 
-    id = models.UUIDField(
-        default=uuid.uuid4,
-        unique=True,
-        editable=False,
-        db_index=True,
-        primary_key=True,
-    )
     username = models.CharField(max_length=255, unique=True)
     email = models.EmailField(unique=True)
-    phone = models.CharField(max_length=100)
+    phone = models.CharField(max_length=100, null=True, blank=True)
     display_name = models.CharField(max_length=255, default="")
     first_name = models.CharField(max_length=255, blank=True)
     last_name = models.CharField(max_length=255, blank=True)
     avatar = models.TextField(blank=True)
     cover_image = models.URLField(blank=True, null=True, max_length=800)
-    
+
     date_joined = models.DateTimeField(auto_now_add=True, verbose_name="Created At")
-    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Created At")
-    updated_at = models.DateTimeField(auto_now=True, verbose_name="Last Modified At")
     last_location = models.CharField(max_length=255, blank=True)
     created_location = models.CharField(max_length=255, blank=True)
 
@@ -58,14 +42,13 @@ class User(AbstractBaseUser, PermissionsMixin):
     token_updated_at = models.DateTimeField(null=True)
 
     is_bot = models.BooleanField(default=False)
-    role = models.CharField(max_length=100, choices=Role.choices)
 
     user_timezone = models.CharField(
         max_length=255, default="UTC", choices=USER_TIMEZONE_CHOICES
     )
 
-    USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = ["username"]
+    USERNAME_FIELD = "username"
+    REQUIRED_FIELDS = ["email"]
 
     objects = UserManager()
 
@@ -76,21 +59,15 @@ class User(AbstractBaseUser, PermissionsMixin):
         ordering = ("-created_at",)
 
     def __str__(self) -> str:
-        return f"{self.username} <{self.email}>"
+        return f"{self.pk} <{self.email}>"
 
     def save(self, *args, **kwargs):
         self.email = self.email.lower().strip()
+        super().save(*args, **kwargs)
 
 
-class Profile(TimeAuditModel):
-    id = models.UUIDField(
-        default=uuid.uuid4, unique=True, editable=False, db_index=True, primary_key=True
-    )
-    # User
-    user = models.OneToOneField(
-        User, on_delete=models.CASCADE, related_name="profile"
-    )
-    
+class Profile(BaseModel):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="profile")
 
     class Meta:
         verbose_name = "Profile"

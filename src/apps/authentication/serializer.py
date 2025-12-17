@@ -8,16 +8,14 @@ from django.core.exceptions import ValidationError
 USER = get_user_model()
 
 class LoginSerializer(serializers.Serializer):
-    email = serializers.EmailField()
+    username = serializers.CharField()
     password = serializers.CharField()
 
 
 class RegisterSerializer(serializers.ModelSerializer):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["confirm_password"] = serializers.CharField(
-            style={"input_type": "password"}, write_only=True
-        )
+        self.fields["confirm_password"] = serializers.CharField()
 
     password = serializers.CharField(style={"input_type": "password"}, write_only=True)
 
@@ -36,13 +34,16 @@ class RegisterSerializer(serializers.ModelSerializer):
                 validate_password(password, user)
             except ValidationError as e:
                 error = serializers.as_serializer_error(e)
-                raise serializers.ValidationError(error)
+                raise serializers.ValidationError({
+                    "password": error.get("errors", [])
+                })
             return attrs
         else:
-            raise serializers.ValidationError("Password not matching.")
+            raise serializers.ValidationError({"confirm_password": "Password not matching."})
     
     def create(self, validated_data):
         try:
+            validated_data["is_staff"] = True
             user = self.perform_create(validated_data)
         except IntegrityError:
             raise ValueError("Cannot create user")
@@ -50,5 +51,5 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     def perform_create(self, validated_data):
         with transaction.atomic():
-            user = USER.objects.create_user(**validated_data)
+            user = USER.objects.create_user(**validated_data)        
         return user
