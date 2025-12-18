@@ -32,3 +32,7 @@ SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": True,
     "UPDATE_LAST_LOGIN": False,
 }
+
+
+MONGODB_URI = env.str("MONGODB_URI")
+MONGODB_NAME = env.str("MONGODB_NAME")

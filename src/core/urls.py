@@ -22,6 +22,7 @@ urlpatterns = [
     path("api/v1/", include([
         path("auth/", include("apps.authentication.urls")),
         path("users/", include("apps.users.urls")),
+        path("forms/", include("apps.form_engine.urls")),
     ]))
    
 ]
