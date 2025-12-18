@@ -12,4 +12,7 @@ urlpatterns = [
     path("fields/create/<str:form_id>", views.FieldCreateView.as_view()),
     path("fields/update/<str:field_id>", views.FormFieldUpdateView.as_view()),
     path("fields/destroy/<str:field_id>", views.FieldDestroyView.as_view()),
+
+    path("submissions/create/<str:form_id>", views.FormSubmissionView.as_view()),
+    path("submissions", views.FormSubmissionListView.as_view()),
 ]

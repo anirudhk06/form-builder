@@ -7,5 +7,8 @@ from db.base import BaseModel
 
 class FormMaster(BaseModel):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
-    form_id = models.TextField()
+    form_id = models.CharField(max_length=24)
+
+    class Meta:
+        unique_together = ("user", "form_id")
     

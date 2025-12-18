@@ -119,3 +119,9 @@ class UpdateFieldOrderSerializer(serializers.Serializer):
                 "Duplicate order values are not allowed."
             )
         return value
+    
+
+class FormSubmissionSerializer(serializers.Serializer):
+    values = serializers.DictField(
+        child=serializers.JSONField()
+    )

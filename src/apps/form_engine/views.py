@@ -1,12 +1,17 @@
 from bson import ObjectId
 from django.utils import timezone
+from datetime import datetime, time
+from django.utils.dateparse import parse_date
 from rest_framework import status, generics, views
 from rest_framework.response import Response
 from pymongo import ReturnDocument, UpdateOne
 
-from .serializer import DynamicFormSerializer, FormFieldSerializer, UpdateFieldOrderSerializer
-from core.db.mongo import forms_collection, field_collection
+from apps.form_engine.utils.field_validation import validate_field_value
+
+from .serializer import DynamicFormSerializer, FormFieldSerializer, FormSubmissionSerializer, UpdateFieldOrderSerializer
+from core.db.mongo import forms_collection, field_collection, submissions_collection
 from core.utils.pagination import MongoPageNumberPagination
+from apps.form_engine.models import FormMaster
 
 
 class FormCreateView(views.APIView):
@@ -89,7 +94,24 @@ class FormListView(views.APIView):
 
         auth_user = request.user
 
-        query = {"created_by": str(auth_user.pk)}
+        if auth_user.is_staff:
+            query = {"created_by": str(auth_user.pk)}
+        else:
+            form_ids = list(
+                FormMaster.objects.filter(user=auth_user)
+                .values_list("form_id", flat=True)
+            )
+
+            if not form_ids:
+                return Response(
+                    paginator.get_paginated_response([], 0, 0)
+                )
+            
+            query = {
+                "_id": {
+                    "$in": [ObjectId(fid) for fid in form_ids]
+                }
+            }
 
         results, count, total_page = paginator.paginate(
             collection=forms_collection(),
@@ -268,3 +290,123 @@ class UpdateFieldIndexView(views.APIView):
             {"detail": "No updates performed"},
             status=status.HTTP_400_BAD_REQUEST,
         )
+
+
+class FormSubmissionView(views.APIView):
+    def post(self, request, form_id=None, *args, **kwargs):
+        auth_user = request.user
+
+        form = forms_collection().find_one({
+            "_id": ObjectId(form_id),
+            "is_active": True
+        })
+
+        if not form:
+            return Response(
+                {"detail": "Form not found or inactive"},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        serializer = FormSubmissionSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        submitted_values = serializer.validated_data["values"]
+
+        fields = list(
+            field_collection().find({
+                "form_id": ObjectId(form_id),
+                "is_active": True
+            })
+        )
+
+        errors = {}
+        cleaned_values = {}
+
+        for field in fields:
+            name = field["name"]
+            value = submitted_values.get(name)
+
+            try:
+                validate_field_value(field, value)
+                if value is not None:
+                    cleaned_values[name] = value
+            except ValueError as e:
+                errors[name] = str(e)
+
+        for field in fields:
+            if field.get("required") and field["name"] not in cleaned_values:
+                errors[field["name"]] = "This field is required"
+
+        if errors:
+            return Response(
+                {"errors": errors},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        result = submissions_collection().insert_one({
+            "form_id": ObjectId(form_id),
+            "submitted_by": str(auth_user.pk),
+            "values": cleaned_values,
+            "submitted_at": timezone.now(),
+            "updated_at": timezone.now(),
+        })
+
+        return Response(
+            {
+                "message": "Form submitted successfully",
+                "submission_id": str(result.inserted_id),
+            },
+            status=status.HTTP_201_CREATED,
+        )
+    
+
+class FormSubmissionListView(views.APIView):
+    def get(self, request, *args, **kwargs):
+        paginator = MongoPageNumberPagination(request)
+        auth_user = request.user
+
+        if auth_user.is_staff:
+            form_ids = list(
+                forms_collection().find(
+                    {"created_by": str(auth_user.pk)},
+                    {"_id": 1}
+                )
+            )
+
+            form_object_ids = [doc["_id"] for doc in form_ids]
+
+            query = {
+                "form_id": {"$in": form_object_ids}
+            }
+        else:
+            query = {"submitted_by": str(auth_user.pk)}
+
+        start_date = request.query_params.get("start_date")
+        end_date = request.query_params.get("end_date")
+
+        date_filter = {}
+
+        if start_date:
+            start = parse_date(start_date)
+            if start:
+                date_filter["$gte"] = datetime.combine(start, time.min)
+
+        if end_date:
+            end = parse_date(end_date)
+            if end:
+                date_filter["$lte"] = datetime.combine(end, time.max)
+        
+        if date_filter:
+            query["submitted_at"] = date_filter
+
+        results, count, total_page = paginator.paginate(
+            collection=submissions_collection(),
+            query=query,
+            sort=("submitted_at", -1),
+        )
+
+        for doc in results:
+            doc["id"] = str(doc.pop("_id"))
+            doc["form_id"] = str(doc.get("form_id")) if doc.get("form_id") else None
+
+        return Response(paginator.get_paginated_response(results, count, total_page))

@@ -1,10 +1,12 @@
-from rest_framework import serializers
+from bson import ObjectId
 from django.contrib.auth import get_user_model
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from core.utils.password_generation import generate_password
+from core.db.mongo import forms_collection
+from rest_framework import serializers
 
 USER = get_user_model()
 
@@ -74,3 +76,30 @@ class UserListSerializer(serializers.ModelSerializer):
             "cover_image",
             "user_timezone"
         ]
+
+
+class AssignFormsSerializer(serializers.Serializer):
+    form_ids = serializers.ListField(
+        child=serializers.CharField(),
+        allow_empty=True
+    )
+
+    def validate_form_ids(self, value):
+        invalid = []
+
+        for form_id in value:
+            try:
+                exists = forms_collection().count_documents(
+                    {"_id": ObjectId(form_id)},
+                    limit=1
+                )
+                if not exists:
+                    invalid.append(form_id)
+            except Exception:
+                invalid.append(form_id)
+
+        if invalid:
+            raise serializers.ValidationError(
+                f"These form IDs do not exist: {invalid}"
+            )
+        return value
