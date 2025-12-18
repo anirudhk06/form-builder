@@ -36,5 +36,3 @@ Users can fill assigned forms and view their own submissions.
 
 ---
 
-## 📂 Project Structure
-
